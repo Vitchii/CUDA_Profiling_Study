@@ -216,9 +216,9 @@ __global__ void primeTestDebug(bool* array, int32u n) {
     return;
 }
 
-// CUDA-Kernel HC ###################################################################################################
+// CUDA-Kernel Heterogeneous Computing #############################################################################
 
-// Noch performanterer Test, unsigned int, nur ungerade Zahlen
+// Wurzel einmalig ziehen
 __global__ void primeTest6(bool* array, int32u u) {
     int32u index = threadIdx.x + blockIdx.x * blockDim.x;
     int32u i = index * 2 - 1; // Index anpassen gemäß 2i - 1, sodass i immer ungerade ist
@@ -226,7 +226,9 @@ __global__ void primeTest6(bool* array, int32u u) {
     if (i == 1 || (i != 3 && i % 3 == 0)) { // 1 und Vielfache von 3 sind keine Primzahlen
         return;
     }
-    for (int32u j = 5; j * j <= i; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
+
+    int32u sqrt = sqrtf(i); // Teiler müssen <= die Quadratwurzel der Zahl sein
+    for (int32u j = 5; j <= sqrt; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
         if (i % j == 0 || i % (j + 2) == 0) {
             return;
         }
@@ -235,225 +237,27 @@ __global__ void primeTest6(bool* array, int32u u) {
     return;
 }
 
-// Noch performanterer Test, unsigned int, nur ungerade Zahlen
+// Neben geraden auch Zahlen ausschließen, die durch 3 teilbar sind
 __global__ void primeTest7(bool* array, int32u u) {
     int32u index = threadIdx.x + blockIdx.x * blockDim.x;
-    int32u i = index * 2 - 1; // Index anpassen gemäß 2i - 1, sodass i immer ungerade ist
+    int32u i = 6 * (index >> 1) + (index % 2 ? 5 : 1); // Zahlen ausschließen, die durch 2 oder 3 teilbar sind
 
-    if (i == 1 || (i != 3 && i % 3 == 0)) { // 1 und Vielfache von 3 sind keine Primzahlen
-        return;
-    }
-    for (int32u j = 5; j * j <= i; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
+    int32u sqrt = sqrtf(i); // Teiler müssen <= die Quadratwurzel der Zahl sein
+    for (int32u j = 5; j <= sqrt; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
         if (i % j == 0 || i % (j + 2) == 0) {
             return;
         }
     }
+
     array[index] = false;
-    return;
-}
-
-// Hilfsfunktionen ##################################################################################################
-
-void clearInputBuffer() { // Hilfsfunktion, um den Eingabepuffer zu leeren
-    int c;
-    while ((c = getchar()) != '\n' && c != EOF) {}
-    return;
-}
-
-void askMethod(int& method, std::string& kernelString) { // Funktion, um die Methode zu wählen
-    int option;
-    printf("Please choose a method. (1, 2, 3, 4, 5)\n");
-    printf("1 = Trivial Test; 2 = Enhanced Test; 3 = Further enhanced Test; "
-        "4 = Sieve of Eratosthenes; 5 = Sieve of Sundaram\n");
-    printf("Enter method option: ");
-    clearInputBuffer;
-    scanf_s("%d", &option);
-
-    switch (option) {
-        case 0:     { method = option; kernelString = "DEBUG KERNEL";                 break; }
-        case 1:     { method = option; kernelString = "primeTest1";                   break; }
-        case 2:     { method = option; kernelString = "primeTest2";                   break; }
-        case 3:     { method = option; kernelString = "primeTest3";                   break; }
-        case 4:     { method = option; kernelString = "sieveEratosthenes";            break; }
-        case 5:     { method = option; kernelString = "sieveSundaram";                break; }
-        case 6:     { method = option; kernelString = "primeTest6";                   break; }
-        case 7:     { method = option; kernelString = "primeTest7";                   break; }
-        case 33:    { method = option; kernelString = "primeTest3Unsigned";           break; }
-        case 44:    { method = option; kernelString = "sieveEratosthenesUnsigned";    break; }
-        case 333:   { method = option; kernelString = "primeTest3UnsignedOdd";        break; }
-        case 444:   { method = option; kernelString = "sieveEratosthenesUnsignedOdd"; break; }
-        case 3333:  { method = option; kernelString = "primeTest3Inverted";           break; }
-        default: {
-            printf("Invalid option. Will commence with the default method: Trivial Test.\n");
-            method = 1; // Standardfall ist der triviale Test
-            kernelString = "primeTest1";
-            break;
-        }
-    }
-
-    printf("\n");
-    return;
-}
-
-void askRange(int64& l, int64& u, int method) { // Funktion, um das zu prüfende Intervall zu wählen
-    int option;
-    printf("Please choose an upper bound. (1, 2, 3, 4, 5)\n");
-    if (method <= 3) { // nur diese Methode erlauben l > 0
-        printf("1 = 1,000; 2 = 100,000,000; 3 = 1,000,000,000; 4 = 4,000,000,000; 5 = custom range\n");
-    }
-    else {
-        printf("1 = 1,000; 2 = 100,000,000; 3 = 1,000,000,000; 4 = 4,000,000,000; 5 = custom upper bound\n");
-    }
-    printf("Enter range option: ");
-    clearInputBuffer;
-    scanf_s("%d", &option);
-
-    l = 0; // Standardwert für untere Grenze ist 0
-    switch (option) {
-        // Test-Option
-        case 0:     { u = 10;           break;  }
-        // Reguläre Optionen
-        case 1:     { u = 1000;         break;  }
-        case 2:     { u = 100000000;    break;  } // 100 Mio.
-        case 3:     { u = 1000000000;   break;  } // 1 Mrd.
-        case 4:     { u = 4000000000;   break;  } // 4 Mrd.
-        case 5: {
-            printf("\nPlease define the range of natural numbers you want to check for primes.\n");
-            if (method <= 3 || method == 33) { // nur diese Methode erlauben l > 0
-                printf("Enter lower bound: ");
-                clearInputBuffer;
-                scanf_s("%lld", &l);
-            }
-            printf("Enter upper bound: ");
-            clearInputBuffer;
-            scanf_s("%lld", &u);
-            if (l > u) { // wenn die obere Grenze  kleiner als die untere ist
-                printf("Invalid range. Will commence with default bound: 50000000.\n");
-                l = 0, u = 1000000;
-            }
-            if (l < 0) { // wenn die untere Grenze negativ ist
-                l = 0;
-                if (u < l) u = l; // wenn die obere Grenze jetzt kleiner als die untere ist
-                printf("Adjusting range to natural numbers, since prime numbers are positive by definition.\n"
-                    "New Range: %lld to %lld.\n", l, u);
-            }
-            if ((method == 33 || method == 333 || method == 3333 || 
-                method == 44 || method == 444) && u >= 4294311961) {
-                u = 4294311960; // maximaler Wert, bei dem die Schleife in primeTest3333 terminieren kann
-                printf("This method can't handle numbers that big.\n"
-                    "New Range: %lld to %lld.\n", l, u);
-		    }
-            break;
-        }
-        // Test-Optionen
-        case 6:     { u = 10000000;     break;  } // 10 Mio.
-        case 7:     { u = 2000000000;   break;  } // 2 Mrd.
-        case 8:     { u = 8000000000;   break;  } // 8 Mrd.
-        case 9:     { l = 10;  
-                      u = 1000;
-                      break;
-        }
-        default: {
-            u = 1000000; // Standardwert: 1 Million
-            printf("Invalid option. Will commence with the default bound: %lld.\n", u);
-        }
-    }
-    printf("\n");
-    return;
-}
-
-void askBlockSize(int& blockSize) { // Funktion, um die Blockgröße zu wählen oder alle zu testen
-    char input[10];
-    printf("Please choose the amount of threads per block. (32, 64, 128, 256, 512, 1024, all)\n");
-    printf("Enter block size: ");
-    clearInputBuffer();
-    fgets(input, sizeof(input), stdin);
-
-    input[strcspn(input, "\n")] = 0; // Eingabe bereinigen
-
-    if (strcmp(input, "all") == 0) {
-        blockSize = 1;
-        return;
-    }
-
-    bool isValidNumber = true; // Prüfen, ob die Eingabe eine Zahl ist
-    for (int i = 0; input[i] != '\0'; i++) {
-        if (!isdigit(input[i])) {
-            isValidNumber = false;
-            break;
-        }
-    }
-
-    if (isValidNumber) {
-        int option = atoi(input);
-        if (option % 32 == 0 && option <= 1024) {
-            blockSize = option;
-            return;
-        }
-
-        if (option >= 1 && option <= 6) {
-            switch (option) {
-                case 1: { blockSize = 32;   return; }
-                case 2: { blockSize = 64;   return; }
-                case 3: { blockSize = 128;  return; }
-                case 4: { blockSize = 256;  return; }
-                case 5: { blockSize = 512;  return; }
-                case 6: { blockSize = 1024; return; }
-            }
-            return;
-        }
-    }
-
-    printf("Invalid option. Will commence with the default block size of 256.\n");
-    blockSize = 256; // Standardfall
-    return;
-}
-
-void output(bool* array, int64 l, int64 u, int64 rangeSize, long primeCount) { // Ausgabe-Funktion
-    if (primeCount > 0) {
-        std::string input = "y"; // Ausgabe der gefunden Primzahlen ist standardmäßig aktiviert
-
-        printf("\n");
-        if (primeCount > 25) { // keine automatische Ausgabe, wenn mehr als x Primzahlen gefunden wurden
-            printf("Dou you want a list? (y/n)\n");
-            printf("Enter y or n: ");
-            std::getline(std::cin, input);
-        }
-
-        if (input == "y" || input == "Y") {
-            // printf("\nPrimes in range %d to %d:\n", l, u);
-            int lineLength = 0;
-            std::ostringstream oss;
-            std::string primeString;
-            printf("\n");
-            for (int64 i = 0; i < rangeSize; i++) { // Ausgabe der Primzahlen
-                if (array[i]) { // wenn die Zahl eine Primzahl ist
-                    oss.str("");
-                    oss << i;
-                    primeString = oss.str();
-                    if (lineLength + primeString.length() + 1 > 120) { // Prüfen, 
-                        // ob das Hinzufügen der nächsten Zahl die maximale Zeilenlänge überschreitet
-                        std::cout << std::endl;  // Zeilenumbruch
-                        lineLength = 0;   // Zähler zurücksetzen
-                    }
-                    std::cout << primeString << " ";
-                    lineLength += primeString.length() + 1; // Aktualisieren der aktuellen Zeilenlänge
-                }
-            }
-            printf("\n");
-        }
-        else {
-            printf("\nOkay, bye!\n");
-        }
-    }
     return;
 }
 
 // Funktion zum Kernel-Aufruf #######################################################################################
 
-void executeKernel(int method, int blockSize, bool* array, int64 arraySize, int64 l, int64 u, 
-        double* times, bool testAll, std::string kernelString, 
-        bool& needsInversion, bool& needsSundaramTransformation) {
+void executeKernel(int method, int blockSize, bool* array, int64 arraySize, int64 l, int64 u,
+    double* times, bool testAll, std::string kernelString,
+    bool& needsInversion, bool& needsSundaramTransformation) {
 
     for (int run = 0; run < 6; run++) {
         // Array auf dem Device anlegen und kopieren
@@ -484,73 +288,73 @@ void executeKernel(int method, int blockSize, bool* array, int64 arraySize, int6
 
         // Kernel starten
         switch (method) {
-            case 0: { // Test-Kernel 
-                int32u n = (u - 2) / 2; // für Sundaram-Test-Kernel
-                primeTestDebug <<< blocks, blockSize >>> (deviceArray, n);
-                needsSundaramTransformation = true;
-                break;
-            }
-            case 1: { // Trivialer Test
-                primeTest1 <<< blocks, blockSize >>> (deviceArray, l, u);
-                break;
-            }
-            case 2: { // Verbesserter Test
-                primeTest2 <<< blocks, blockSize >>> (deviceArray, l, u);
-                break;
-            }
-            case 3: { // Weiter verbesserter Test
-                primeTest3 <<< blocks, blockSize >>> (deviceArray, l, u);
-                break;
-            }
-            case 4: { // Sieb des Eratosthenes
-                sieveEratosthenes <<< sqrtf(blocks), blockSize >>> (deviceArray, u);
-                break;
-            }
-            case 5: { // Sieb des Sundaram
-                sieveSundaram <<< sqrtf(blocks), blockSize >>> (deviceArray, u);
-                needsSundaramTransformation = true;
-                break;
-            }
-            case 6: { // Im Rahmen des Moduls Heterogeneous Computing weiterentwickelter primeTest3333
-                int32u uTemp = u / 2;
-                primeTest6 <<< blocks, blockSize >>> (deviceArray, uTemp);
-                needsInversion = true;
-                break;
-            }
-            case 7: { // Im Rahmen des Moduls Heterogeneous Computing weiterentwickelter primeTest3333
-                int32u uTemp = u / 2;
-                primeTest7 <<< blocks, blockSize >>> (deviceArray, uTemp);
-                needsInversion = true;
-                break;
-            }
-            case 33: { // Weiter verbesserter Test mit unsigned int (32 Bit)
-                int32u uTemp = u;
-                primeTest3Unsigned <<< blocks, blockSize >>> (deviceArray, uTemp);
-                break;
-            }
-            case 44: { // Sieb des Eratosthenes mit unsigned int (32 Bit)
-                int32u uTemp = u;
-                sieveEratosthenesUnsigned <<< sqrtf(blocks), blockSize >>> (deviceArray, uTemp);
-                break;
-            }
-            case 333: { // Weiter verbesserter Test mit unsigned int (32 Bit), nur ungerade Zahlen
-                int32u uTemp = u / 2;
-                primeTest3UnsignedOdd <<< blocks, blockSize >>> (deviceArray, uTemp);
-                break;
-            }
-            case 444: { // Weiter optimiertes Sieben mit unsigned int (32 Bit), nur ungerade Zahlen
-                int32u uTemp = u / 2;
-                sieveEratosthenesUnsignedOdd <<< sqrtf(blocks), blockSize >>> (deviceArray, uTemp);
-                break;
-            }
-            case 3333: { // Noch weiter verbesserter Test
-                int32u uTemp = u / 2;
-                primeTest3Inverted <<< blocks, blockSize >>> (deviceArray, uTemp);
-                needsInversion = true;
-                break;
-            }
+        case 0: { // Test-Kernel 
+            int32u n = (u - 2) / 2; // für Sundaram-Test-Kernel
+            primeTestDebug << < blocks, blockSize >> > (deviceArray, n);
+            needsSundaramTransformation = true;
+            break;
         }
-  
+        case 1: { // Trivialer Test
+            primeTest1 << < blocks, blockSize >> > (deviceArray, l, u);
+            break;
+        }
+        case 2: { // Verbesserter Test
+            primeTest2 << < blocks, blockSize >> > (deviceArray, l, u);
+            break;
+        }
+        case 3: { // Weiter verbesserter Test
+            primeTest3 << < blocks, blockSize >> > (deviceArray, l, u);
+            break;
+        }
+        case 4: { // Sieb des Eratosthenes
+            sieveEratosthenes << < sqrtf(blocks), blockSize >> > (deviceArray, u);
+            break;
+        }
+        case 5: { // Sieb des Sundaram
+            sieveSundaram << < sqrtf(blocks), blockSize >> > (deviceArray, u);
+            needsSundaramTransformation = true;
+            break;
+        }
+        case 6: { // Im Rahmen des Moduls Heterogeneous Computing weiterentwickelter primeTest3333
+            int32u uTemp = u / 2;
+            primeTest6 << < blocks, blockSize >> > (deviceArray, uTemp);
+            needsInversion = true;
+            break;
+        }
+        case 7: { // Im Rahmen des Moduls Heterogeneous Computing weiterentwickelter primeTest3333
+            int32u uTemp = u / 2;
+            primeTest7 << < blocks, blockSize >> > (deviceArray, uTemp);
+            needsInversion = true;
+            break;
+        }
+        case 33: { // Weiter verbesserter Test mit unsigned int (32 Bit)
+            int32u uTemp = u;
+            primeTest3Unsigned << < blocks, blockSize >> > (deviceArray, uTemp);
+            break;
+        }
+        case 44: { // Sieb des Eratosthenes mit unsigned int (32 Bit)
+            int32u uTemp = u;
+            sieveEratosthenesUnsigned << < sqrtf(blocks), blockSize >> > (deviceArray, uTemp);
+            break;
+        }
+        case 333: { // Weiter verbesserter Test mit unsigned int (32 Bit), nur ungerade Zahlen
+            int32u uTemp = u / 2;
+            primeTest3UnsignedOdd << < blocks, blockSize >> > (deviceArray, uTemp);
+            break;
+        }
+        case 444: { // Weiter optimiertes Sieben mit unsigned int (32 Bit), nur ungerade Zahlen
+            int32u uTemp = u / 2;
+            sieveEratosthenesUnsignedOdd << < sqrtf(blocks), blockSize >> > (deviceArray, uTemp);
+            break;
+        }
+        case 3333: { // Noch weiter verbesserter Test
+            int32u uTemp = u / 2;
+            primeTest3Inverted << < blocks, blockSize >> > (deviceArray, uTemp);
+            needsInversion = true;
+            break;
+        }
+        }
+
         cudaDeviceSynchronize(); // Warten, bis alle Threads fertig sind
         cudaProfilerStop();
 
@@ -616,6 +420,26 @@ void transformOdd(bool*& array, int64 rangeSize, int64 arraySize) {  // für Met
     array = tempArray; // Pointer umleiten
 }
 
+void transform2_3(bool*& array, int64 rangeSize, int64 arraySize) {
+    printf("\nTransforming array ... ");
+    bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool)); // Neues Array anlegen
+
+    for (int64 i = 0; i < rangeSize; i++) { // Array mit false initialisieren
+        tempArray[i] = false;
+    }
+
+    for (int64 i = 0; i < arraySize; i++) { // Array transformieren
+        tempArray[6 * (i / 2) + (i % 2 ? 5 : 1)] = array[i];
+    }
+
+    tempArray[1] = false; // 1 ist keine Primzahl
+    tempArray[2] = true; // 2 ist eine Primzahl
+    tempArray[3] = true; // 3 ist eine Primzahl
+
+    array = tempArray; // Pointer umleiten
+}
+
+
 void transformSundaram(bool*& array, int64 rangeSize, int64 u) {  // für das Sundaram-Sieb
     printf("\nTransforming array ... ");
     bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool));  // Neues Array anlegen
@@ -640,6 +464,226 @@ void transformSundaram(bool*& array, int64 rangeSize, int64 u) {  // für das Su
     free(tempArray); // Speicher freigeben
 }
 
+// Hilfsfunktionen ##################################################################################################
+
+void clearInputBuffer() { // Hilfsfunktion, um den Eingabepuffer zu leeren
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF) {}
+    return;
+}
+
+void askMethod(int& method, std::string& kernelString) { // Funktion, um die Methode zu wählen
+    int option;
+    printf("Please choose a method. (1, 2, 3, 4, 5)\n");
+    printf("1 = Trivial Test; 2 = Enhanced Test; 3 = Further enhanced Test; "
+        "4 = Sieve of Eratosthenes; 5 = Sieve of Sundaram\n");
+    printf("Enter method option: ");
+    clearInputBuffer;
+    scanf_s("%d", &option);
+
+    switch (option) {
+        case 0:     { method = option; kernelString = "DEBUG KERNEL";                 break; }
+        case 1:     { method = option; kernelString = "primeTest1";                   break; }
+        case 2:     { method = option; kernelString = "primeTest2";                   break; }
+        case 3:     { method = option; kernelString = "primeTest3";                   break; }
+        case 4:     { method = option; kernelString = "sieveEratosthenes";            break; }
+        case 5:     { method = option; kernelString = "sieveSundaram";                break; }
+        case 6:     { method = option; kernelString = "primeTest6";                   break; }
+        case 7:     { method = option; kernelString = "primeTest7";                   break; }
+        case 33:    { method = option; kernelString = "primeTest3Unsigned";           break; }
+        case 44:    { method = option; kernelString = "sieveEratosthenesUnsigned";    break; }
+        case 333:   { method = option; kernelString = "primeTest3UnsignedOdd";        break; }
+        case 444:   { method = option; kernelString = "sieveEratosthenesUnsignedOdd"; break; }
+        case 3333:  { method = option; kernelString = "primeTest3Inverted";           break; }
+        default: {
+            printf("Invalid option. Will commence with the default method: Trivial Test.\n");
+            method = 1; // Standardfall ist der triviale Test
+            kernelString = "primeTest1";
+            break;
+        }
+    }
+
+    printf("\n");
+    return;
+}
+
+void askRange(int64& l, int64& u, int method, bool& verifiable) { // Funktion, um das zu prüfende Intervall zu wählen
+    int option;
+    printf("Please choose an upper bound. (1, 2, 3, 4, 5)\n");
+    if (method <= 3) { // nur diese Methode erlauben l > 0
+        printf("1 = 1,000; 2 = 100,000,000; 3 = 1,000,000,000; 4 = 4,000,000,000; 5 = custom range\n");
+    }
+    else {
+        printf("1 = 1,000; 2 = 100,000,000; 3 = 1,000,000,000; 4 = 4,000,000,000; 5 = custom upper bound\n");
+    }
+    printf("Enter range option: ");
+    clearInputBuffer;
+    scanf_s("%d", &option);
+
+    l = 0; // Standardwert für untere Grenze ist 0
+    switch (option) {
+        // Test-Option
+        case 0: { u = 10;               verifiable = true;  break; }
+        // Reguläre Optionen
+        case 1:     { u = 1000;         verifiable = true;  break;  }
+        case 2:     { u = 100000000;    verifiable = true;  break;  } // 100 Mio.
+        case 3:     { u = 1000000000;   verifiable = true;  break;  } // 1 Mrd.
+        case 4:     { u = 4000000000;   verifiable = true;  break;  } // 4 Mrd.
+        case 5: {
+            printf("\nPlease define the range of natural numbers you want to check for primes.\n");
+            if (method <= 3 || method == 33) { // nur diese Methode erlauben l > 0
+                printf("Enter lower bound: ");
+                clearInputBuffer;
+                scanf_s("%lld", &l);
+            }
+            printf("Enter upper bound: ");
+            clearInputBuffer;
+            scanf_s("%lld", &u);
+            if (l > u) { // wenn die obere Grenze  kleiner als die untere ist
+                printf("Invalid range. Will commence with default bound: 50000000.\n");
+                l = 0, u = 1000000;
+            }
+            if (l < 0) { // wenn die untere Grenze negativ ist
+                l = 0;
+                if (u < l) u = l; // wenn die obere Grenze jetzt kleiner als die untere ist
+                printf("Adjusting range to natural numbers, since prime numbers are positive by definition.\n"
+                    "New Range: %lld to %lld.\n", l, u);
+            }
+            if ((method == 33 || method == 333 || method == 3333 || 
+                method == 44 || method == 444) && u >= 4294311961) {
+                u = 4294311960; // maximaler Wert, bei dem die Schleife in primeTest3333 terminieren kann
+                printf("This method can't handle numbers that big.\n"
+                    "New Range: %lld to %lld.\n", l, u);
+		    }
+            break;
+        }
+        // Test-Optionen
+        case 6:     { u = 10000000;     verifiable = true;  break;  } // 10 Mio.
+        case 7:     { u = 2000000000;   verifiable = true;  break;  } // 2 Mrd.
+        case 8:     { u = 8000000000;   verifiable = true;  break;  } // 8 Mrd.
+        case 9:     { l = 10;  
+                      u = 1000;
+                      break;
+        }
+        default: {
+            u = 1000000; // Standardwert: 1 Million
+            verifiable = true;
+            printf("Invalid option. Will commence with the default bound: %lld.\n", u);
+        }
+    }
+    printf("\n");
+    return;
+}
+
+void askBlockSize(int& blockSize) { // Funktion, um die Blockgröße zu wählen oder alle zu testen
+    char input[10];
+    printf("Please choose the amount of threads per block. (32, 64, 128, 256, 512, 1024, all)\n");
+    printf("Enter block size: ");
+    clearInputBuffer();
+    fgets(input, sizeof(input), stdin);
+
+    input[strcspn(input, "\n")] = 0; // Eingabe bereinigen
+
+    if (strlen(input) == 0) { // Überprüfen, ob die Eingabe leer ist
+        printf("No input provided. Using the default block size of 256.\n");
+        blockSize = 256;
+        return;
+    }
+
+    if (strcmp(input, "all") == 0) {
+        blockSize = 1;
+        return;
+    }
+
+    bool isValidNumber = true; // Prüfen, ob die Eingabe eine Zahl ist
+    for (int i = 0; input[i] != '\0'; i++) {
+        if (!isdigit(input[i])) {
+            isValidNumber = false;
+            break;
+        }
+    }
+
+    if (isValidNumber) {
+        int option = atoi(input);
+        if (option % 32 == 0 && option <= 1024) {
+            blockSize = option;
+            return;
+        }
+
+        if (option >= 1 && option <= 6) {
+            switch (option) {
+                case 1: { blockSize = 32;   return; }
+                case 2: { blockSize = 64;   return; }
+                case 3: { blockSize = 128;  return; }
+                case 4: { blockSize = 256;  return; }
+                case 5: { blockSize = 512;  return; }
+                case 6: { blockSize = 1024; return; }
+            }
+            return;
+        }
+    }
+
+    printf("Invalid option. Will commence with the default block size of 256.\n");
+    blockSize = 256; // Standardfall
+    return;
+}
+
+bool matchesRealPrimeNumber(int64 u, long primeCount) {
+    switch (u) {
+        case 10:          return (primeCount == 4);
+        case 1000:        return (primeCount == 168);
+        case 1000000:	  return (primeCount == 78498);     // 1 Mio.
+        case 10000000:    return (primeCount == 664579);    // 10 Mio.
+        case 100000000:   return (primeCount == 5761455);   // 100 Mio.
+        case 1000000000:  return (primeCount == 50847534);  // 1 Mrd.
+        case 2000000000:  return (primeCount == 98222287);  // 2 Mrd.
+        case 4000000000:  return (primeCount == 189961812); // 4 Mrd.
+        case 8000000000:  return (primeCount == 367783654); // 8 Mrd.
+        default:          return false;
+    }
+    return;
+}
+
+void output(bool* array, int64 l, int64 u, int64 rangeSize, long primeCount) { // Ausgabe-Funktion
+    if (primeCount > 0) {
+        std::string input = "y"; // Ausgabe der gefunden Primzahlen ist standardmäßig aktiviert
+
+        printf("\n");
+        if (primeCount > 25) { // keine automatische Ausgabe, wenn mehr als x Primzahlen gefunden wurden
+            printf("Dou you want a list? (y/n)\n");
+            printf("Enter y or n: ");
+            std::getline(std::cin, input);
+        }
+
+        if (input == "y" || input == "Y") {
+            // printf("\nPrimes in range %d to %d:\n", l, u);
+            int lineLength = 0;
+            std::ostringstream oss;
+            std::string primeString;
+            printf("\n");
+            for (int64 i = 0; i < rangeSize; i++) { // Ausgabe der Primzahlen
+                if (array[i]) { // wenn die Zahl eine Primzahl ist
+                    oss.str("");
+                    oss << i;
+                    primeString = oss.str();
+                    if (lineLength + primeString.length() + 1 > 120) { // Prüfen, 
+                        // ob das Hinzufügen der nächsten Zahl die maximale Zeilenlänge überschreitet
+                        std::cout << std::endl;  // Zeilenumbruch
+                        lineLength = 0;   // Zähler zurücksetzen
+                    }
+                    std::cout << primeString << " ";
+                    lineLength += primeString.length() + 1; // Aktualisieren der aktuellen Zeilenlänge
+                }
+            }
+            printf("\n");
+        }
+        else {
+            printf("\nOkay, bye!\n");
+        }
+    }
+    return;
+}
+
 // Hauptfunktion ####################################################################################################
 
 int main() {
@@ -651,19 +695,27 @@ int main() {
     int method;
     std::string kernelString;
     askMethod(method, kernelString);
+
     bool needsOddTransformation = false; // ob nur ungerade Zahlen geprüft werden
+    bool needs2_3Transformation = false; // ob nur Zahlen geprüft werden, die nicht durch 2 und 3 teilbar sind
     bool needsSundaramTransformation = false; // ob das Array transformiert werden muss
     bool needsInversion = false; // ob das Array invertieert werden muss
 
     // Welche Zahlen sollen geprüft werden?
     int64 l, u; // untere und obere Grenze
-    askRange(l, u, method);
+    bool verifiable = false;
+    askRange(l, u, method, verifiable);
     int64 rangeSize = u + 1 - l;
     int64 arraySize = rangeSize;
 
-    if (method >= 100 || method == 6 || method == 7) { // für Methoden, die nur ungerade Zahlen prüfen
+    if (method >= 100 || method == 6) { // für Methoden, die nur ungerade Zahlen prüfen
         arraySize = rangeSize / 2; // Array-Größe anpassen
         needsOddTransformation = true;
+    }
+
+    if (method == 7) { // für Methoden, die nur Zahlen prüfen, die weder durch 2 noch durch 3 teilbar sind
+        arraySize = rangeSize / 3; // Array-Größe anpassen
+        needs2_3Transformation = true;
     }
 
     // Parameter für den Kernel setzen
@@ -677,7 +729,7 @@ int main() {
         blockSize = 32;
 	}
 
-    // Kernel starten ===============================================================================================
+    // Kernel-Ausführung ===========================================================================================
 
     printf("\nInitializing arrays ... ");
 
@@ -688,17 +740,20 @@ int main() {
         array[i] = true;
     }
 
-    // Kernel ausführen
+    // Kernel starten
     executeKernel(method, blockSize, array, arraySize, l, u, times, testAll, kernelString,
         needsInversion, needsSundaramTransformation);
 
-    // Ausgabe vorbereiten
+    // Ausgabe-Array ggf. invertieren oder transformieren
     if(needsInversion) {
         invertArray(array, rangeSize, arraySize);
 	}
     if (needsOddTransformation) {
 		transformOdd(array, rangeSize, arraySize);
 	}
+    if (needs2_3Transformation) {
+        transform2_3(array, rangeSize, arraySize);
+    }
     if (needsSundaramTransformation) {
         transformSundaram(array, rangeSize, u);
     }
@@ -712,8 +767,8 @@ int main() {
         }
     }
 
-    // Ausgabe-Methode instruieren 
     printf("\n\nFound %d primes in range %lld to %lld. ", primeCount, l, u);
+
     if (!testAll) {
         printf("This took %lf seconds.", times[0]);
     }
@@ -722,6 +777,17 @@ int main() {
         printf("\n%10s %10.6lf %10.6lf %10.6lf %10.6lf %10.6lf %10.6lf \n", "Time (s):  ",
             times[0], times[1], times[2], times[3], times[4], times[5]);
     }
+
+    if (verifiable) {
+        if (matchesRealPrimeNumber(u, primeCount)) {
+			printf("\nThe number of found primes seems to check out.\n");
+		}
+		else {
+			printf("\nThere's a mismatch between the number of found primes and the actual number "
+                "included in the given interval.");
+		}
+    }
+
     output(array, l, u, rangeSize, primeCount); // Gibt Werte an Ausgabe-Funktion weiter
     
     free(array); // Speicher freigeben  
@@ -740,4 +806,5 @@ int main() {
         33) 270s, 44) 330s, 
         333) 134s 
         3333) 93s 
+        7) 65s
  */
