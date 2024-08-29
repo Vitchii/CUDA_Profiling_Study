@@ -4,7 +4,7 @@ Bachelorarbeit Informatik, Universität Trier, 2024
 Fabian Vecellio del Monego, 2024
 */
 
-// ###################################################################################################################
+// ##################################################################################################################
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
@@ -22,7 +22,7 @@ Fabian Vecellio del Monego, 2024
 using int64 = long long int;  // weil "long" unter Windows nur 32 Bit hat und "long long int" unübersichtlich ist
 using int32u = unsigned int;
 
-// CUDA-Kernel #######################################################################################################
+// CUDA-Kernel ######################################################################################################
 
 // Trivialer Primzahl-Test
 __global__ void primeTest1(bool* array, int64 l, int64 u) {
@@ -186,7 +186,7 @@ __global__ void sieveEratosthenesUnsignedOdd(bool* array, int32u u) {
     return;
     /* Leider funktioniert dieser Kernel nicht korrekt.Im Bereich bis bspw. 1000 haut es noch hin, aber bei größeren 
        Intervallen werden nicht mehr alle Primzahlen gefunden. Desto größer das Intervall, desto mehr Primzahlen 
-       bleiben unerkannt. Ich habe einige Zeit in das Debugging dieses Kernels gesteck, mich aufgrund der eigentlichen 
+       bleiben unerkannt. Ich habe einige Zeit in das Debugging des Kernels gesteck, mich aufgrund der eigentlichen 
        Zielsetzugn dieser Arbeit und der ohnehin performanteren Methode primeTest3UnsignedOdd dagegen entschieden, 
        weiter Zeit in diese eigentlich sehr interessante Variation des Siebes des Eratosthenes zu stecken. Ich habe 
        den Kernel aber dennoch im Code belassen - vielleicht finde ich ja später einmal eine Lösung. */
@@ -216,7 +216,43 @@ __global__ void primeTestDebug(bool* array, int32u n) {
     return;
 }
 
-// Hilfsfunktionen ###################################################################################################
+// CUDA-Kernel HC ###################################################################################################
+
+// Noch performanterer Test, unsigned int, nur ungerade Zahlen
+__global__ void primeTest6(bool* array, int32u u) {
+    int32u index = threadIdx.x + blockIdx.x * blockDim.x;
+    int32u i = index * 2 - 1; // Index anpassen gemäß 2i - 1, sodass i immer ungerade ist
+
+    if (i == 1 || (i != 3 && i % 3 == 0)) { // 1 und Vielfache von 3 sind keine Primzahlen
+        return;
+    }
+    for (int32u j = 5; j * j <= i; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
+        if (i % j == 0 || i % (j + 2) == 0) {
+            return;
+        }
+    }
+    array[index] = false;
+    return;
+}
+
+// Noch performanterer Test, unsigned int, nur ungerade Zahlen
+__global__ void primeTest7(bool* array, int32u u) {
+    int32u index = threadIdx.x + blockIdx.x * blockDim.x;
+    int32u i = index * 2 - 1; // Index anpassen gemäß 2i - 1, sodass i immer ungerade ist
+
+    if (i == 1 || (i != 3 && i % 3 == 0)) { // 1 und Vielfache von 3 sind keine Primzahlen
+        return;
+    }
+    for (int32u j = 5; j * j <= i; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
+        if (i % j == 0 || i % (j + 2) == 0) {
+            return;
+        }
+    }
+    array[index] = false;
+    return;
+}
+
+// Hilfsfunktionen ##################################################################################################
 
 void clearInputBuffer() { // Hilfsfunktion, um den Eingabepuffer zu leeren
     int c;
@@ -240,6 +276,8 @@ void askMethod(int& method, std::string& kernelString) { // Funktion, um die Met
         case 3:     { method = option; kernelString = "primeTest3";                   break; }
         case 4:     { method = option; kernelString = "sieveEratosthenes";            break; }
         case 5:     { method = option; kernelString = "sieveSundaram";                break; }
+        case 6:     { method = option; kernelString = "primeTest6";                   break; }
+        case 7:     { method = option; kernelString = "primeTest7";                   break; }
         case 33:    { method = option; kernelString = "primeTest3Unsigned";           break; }
         case 44:    { method = option; kernelString = "sieveEratosthenesUnsigned";    break; }
         case 333:   { method = option; kernelString = "primeTest3UnsignedOdd";        break; }
@@ -273,27 +311,12 @@ void askRange(int64& l, int64& u, int method) { // Funktion, um das zu prüfende
     l = 0; // Standardwert für untere Grenze ist 0
     switch (option) {
         // Test-Option
-        case 0: {
-            u = 10;
-            break;
-        }
+        case 0:     { u = 10;           break;  }
         // Reguläre Optionen
-        case 1: {
-            u = 1000;
-            break;
-        }
-        case 2: {
-            u = 100000000; // 100 Mio.
-            break;
-        }
-        case 3: {
-            u = 1000000000; // 1 Mrd.
-            break;
-        }
-        case 4: {
-            u = 4000000000; // 4 Mrd.
-            break;
-        }
+        case 1:     { u = 1000;         break;  }
+        case 2:     { u = 100000000;    break;  } // 100 Mio.
+        case 3:     { u = 1000000000;   break;  } // 1 Mrd.
+        case 4:     { u = 4000000000;   break;  } // 4 Mrd.
         case 5: {
             printf("\nPlease define the range of natural numbers you want to check for primes.\n");
             if (method <= 3 || method == 33) { // nur diese Methode erlauben l > 0
@@ -323,22 +346,12 @@ void askRange(int64& l, int64& u, int method) { // Funktion, um das zu prüfende
             break;
         }
         // Test-Optionen
-        case 6: {
-            u = 10000000; // 10 Mio.
-            break;
-        }
-        case 7: {
-            u = 2000000000; // 2 Mrd.
-            break;
-        }
-        case 8: {
-            u = 8000000000; // 8 Mrd.
-            break;
-        }
-        case 9: {
-            l = 10;
-            u = 1000;
-            break;
+        case 6:     { u = 10000000;     break;  } // 10 Mio.
+        case 7:     { u = 2000000000;   break;  } // 2 Mrd.
+        case 8:     { u = 8000000000;   break;  } // 8 Mrd.
+        case 9:     { l = 10;  
+                      u = 1000;
+                      break;
         }
         default: {
             u = 1000000; // Standardwert: 1 Million
@@ -436,63 +449,26 @@ void output(bool* array, int64 l, int64 u, int64 rangeSize, long primeCount) { /
     return;
 }
 
-// Hauptfunktion #####################################################################################################
+// Funktion zum Kernel-Aufruf #######################################################################################
 
-int main() {
-    // Methode wählen
-    int method;
-    std::string kernelString;
-    askMethod(method, kernelString);
-    bool needsOddTransformation = false; // ob nur ungerade Zahlen geprüft werden
-    bool needsSundaramTransformation = false; // ob das Array transformiert werden muss
-    bool needsInversion = false; // ob das Array invertieert werden muss
+void executeKernel(int method, int blockSize, bool* array, int64 arraySize, int64 l, int64 u, 
+        double* times, bool testAll, std::string kernelString, 
+        bool& needsInversion, bool& needsSundaramTransformation) {
 
-    // Welche Zahlen sollen geprüft werden?
-    int64 l, u; // untere und obere Grenze
-    askRange(l, u, method);
-    int64 rangeSize = u + 1 - l;
-    int64 arraySize = rangeSize;
-    int32u n = (u - 2) / 2; // für Sundaram-Test-Kernel
-
-    if (method >= 100) { // für Methoden, die nur ungerade Zahlen prüfen
-        arraySize = rangeSize / 2; // Array-Größe anpassen
-        needsOddTransformation = true;
-    }
-
-    // Parameter für den Kernel setzen
-    int blockSize; // Anzahl der Threads pro Block
-    askBlockSize(blockSize);
-
-    bool testAll = false;
-    double times[6]; // Zeiten für die verschiedenen Blockgrößen
-    if (blockSize == 1) { // alle Blockgrößen testen
-        testAll = true;
-        blockSize = 32;
-	}
-
-    // ==============================================================================================================
-
-    printf("\nInitializing arrays ... ");
-
-    // Array auf dem Host anlegen und initialisieren
-    bool* array;
-    array = (bool*)malloc(arraySize * sizeof(bool)); // Array auf dem Host anlegen
-    for (int64 i = 0; i < arraySize; i++) { // Array mit true initialisieren
-        array[i] = true;
-    }
-
-    for (int run = 0; run < 6; run++) { // Schleife, wenn alle Blockgrößen getestet werden
-
+    for (int run = 0; run < 6; run++) {
         // Array auf dem Device anlegen und kopieren
         bool* deviceArray;
+
         cudaError_t error; // Fehler-Variable
         error = cudaMalloc((void**)&deviceArray, arraySize * sizeof(bool));
         if (error != cudaSuccess) {
             fprintf(stderr, "CUDA error in cudaMalloc: %s\n", cudaGetErrorString(error));
         }
+
         error = cudaMemcpy(deviceArray, array, arraySize * sizeof(bool), cudaMemcpyHostToDevice);
         if (error != cudaSuccess) {
             fprintf(stderr, "CUDA error in cudaMemcpy (HostToDevice): %s\n", cudaGetErrorString(error));
+            cudaFree(deviceArray);
         }
 
         // Kernel-Konfiguration berechnen
@@ -501,7 +477,7 @@ int main() {
 
         printf("\nLaunching CUDA kernel %s with %d threads per block ... ", kernelString.c_str(), blockSize);
         if (!testAll) printf("\nSearching for primes in range %lld to %lld ... ", l, u);
-        cudaProfilerStart;
+        cudaProfilerStart();
 
         // Zeitmessung starten
         auto start = std::chrono::high_resolution_clock::now();
@@ -509,6 +485,7 @@ int main() {
         // Kernel starten
         switch (method) {
             case 0: { // Test-Kernel 
+                int32u n = (u - 2) / 2; // für Sundaram-Test-Kernel
                 primeTestDebug <<< blocks, blockSize >>> (deviceArray, n);
                 needsSundaramTransformation = true;
                 break;
@@ -532,6 +509,18 @@ int main() {
             case 5: { // Sieb des Sundaram
                 sieveSundaram <<< sqrtf(blocks), blockSize >>> (deviceArray, u);
                 needsSundaramTransformation = true;
+                break;
+            }
+            case 6: { // Im Rahmen des Moduls Heterogeneous Computing weiterentwickelter primeTest3333
+                int32u uTemp = u / 2;
+                primeTest6 <<< blocks, blockSize >>> (deviceArray, uTemp);
+                needsInversion = true;
+                break;
+            }
+            case 7: { // Im Rahmen des Moduls Heterogeneous Computing weiterentwickelter primeTest3333
+                int32u uTemp = u / 2;
+                primeTest7 <<< blocks, blockSize >>> (deviceArray, uTemp);
+                needsInversion = true;
                 break;
             }
             case 33: { // Weiter verbesserter Test mit unsigned int (32 Bit)
@@ -561,9 +550,9 @@ int main() {
                 break;
             }
         }
-
+  
         cudaDeviceSynchronize(); // Warten, bis alle Threads fertig sind
-        cudaProfilerStop;
+        cudaProfilerStop();
 
         // Zeitmessung stoppen
         auto end = std::chrono::high_resolution_clock::now();
@@ -576,81 +565,146 @@ int main() {
             if (error != cudaSuccess) {
                 fprintf(stderr, "CUDA error in cudaMemcpy (DeviceToHost): %s\n", cudaGetErrorString(error));
             }
-
-            run = 6; // Schleife beenden
+            run = 6;  // Schleife beenden
         }
         else {
             blockSize *= 2; // Blockgröße verdoppeln
         }
 
         // Speicher wieder freigeben
-        error = cudaFree(deviceArray); 
+        error = cudaFree(deviceArray);
         if (error != cudaSuccess) {
             fprintf(stderr, "CUDA error in cudaFree: %s\n", cudaGetErrorString(error));
         }
     }
+    return;
+}
 
-    // Ausgabe vorbereiten ==========================================================================================
+// Funktionern zur Transformation des Arrays ########################################################################
 
-    if (needsInversion) { // falls Primzahlen als false markiert wurden
-        printf("\nInverting array ... ");
-        bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool)); // Neues Array anlegen
+void invertArray(bool*& array, int64 rangeSize, int64 arraySize) { // falls Primzahlen als false markiert wurden
+    printf("\nInverting array ... ");
+    bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool)); // Neues Array anlegen
 
-        for (int64 i = 0; i <= u; i++) { // Array mit false initialisieren
-            tempArray[i] = false;
-        }
-
-        for (int64 i = 0; i < arraySize; i++) {
-            if (!array[i]) {
-				tempArray[i] = true;
-			}
-        }
-
-        array = tempArray; // Pointer umleiten
+    for (int64 i = 0; i < rangeSize; i++) { // Array mit false initialisieren
+        tempArray[i] = false;
     }
 
-    if (needsOddTransformation) { // für Methoden, die nur ungerade Zahlen prüfen
-        printf("\nTransforming array ... ");
-        bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool)); // Neues Array anlegen
-
-        for (int64 i = 0; i <= u; i++) { // Array mit false initialisieren
-            tempArray[i] = false;
+    for (int64 i = 0; i < arraySize; i++) {
+        if (!array[i]) {
+            tempArray[i] = true;
         }
-
-        for (int64 i = 2; i < arraySize; i++) { // Array transformieren gemäß 2i - 1
-            tempArray[2 * i - 1] = array[i];
-        }
-
-        tempArray[2] = true; // Sonderfall 2 kann bei Methode zu ungeraden Zahlen nicht berücksichtigt werden
-
-        array = tempArray; // Pointer umleiten
     }
 
-    if (needsSundaramTransformation) { // für das Sundaram-Sieb
-        if (!needsOddTransformation) printf("\nTransforming array ... ");
-        bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool)); // Neues Array anlegen
+    array = tempArray;
+}
 
-        for (int64 i = 0; i <= u; i++) { // Array mit false initialisieren
-            tempArray[i] = false;
-        }
+void transformOdd(bool*& array, int64 rangeSize, int64 arraySize) {  // für Methoden, die nur ungerade Zahlen prüfen
+    printf("\nTransforming array ... ");
+    bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool)); // Neues Array anlegen
 
-        for (int64 i = 0; i <= (u - 2) / 2; i++) { // Array transformieren
-            if (array[i]) {
-                int64 prime = 2 * i + 1;
-                if (prime == 1) { // 1 ist keine Primzahl, 2 aber schone 
-                    tempArray[prime + 1] = true;
-                }
-                else {
-                    tempArray[prime] = true;
-                }
+    for (int64 i = 0; i < rangeSize; i++) { // Array mit false initialisieren
+        tempArray[i] = false;
+    }
+
+    for (int64 i = 2; i < arraySize; i++) { // Array transformieren gemäß 2i - 1
+        tempArray[2 * i - 1] = array[i];
+    }
+
+    tempArray[2] = true; // Sonderfall 2 kann bei Methode zu ungeraden Zahlen nicht berücksichtigt werden
+
+    array = tempArray; // Pointer umleiten
+}
+
+void transformSundaram(bool*& array, int64 rangeSize, int64 u) {  // für das Sundaram-Sieb
+    printf("\nTransforming array ... ");
+    bool* tempArray = (bool*)malloc(rangeSize * sizeof(bool));  // Neues Array anlegen
+
+    for (int64 i = 0; i <= u; i++) { // Array mit false initialisieren
+        tempArray[i] = false;
+    }
+
+    for (int64 i = 0; i <= (u - 2) / 2; i++) { // Array transformieren
+        if (array[i]) {
+            int64 prime = 2 * i + 1;
+            if (prime == 1) { // 1 ist keine Primzahl, 2 aber schon
+                tempArray[prime + 1] = true;
+            }
+            else {
+                tempArray[prime] = true;
             }
         }
+    }
 
-        std::copy(tempArray, tempArray + rangeSize, array); // Array kopieren
-        free(tempArray); // Speicher freigeben
+    std::copy(tempArray, tempArray + rangeSize, array); // Array kopieren
+    free(tempArray); // Speicher freigeben
+}
+
+// Hauptfunktion ####################################################################################################
+
+int main() {
+    // Modus wählen
+    
+
+
+    // Methode wählen
+    int method;
+    std::string kernelString;
+    askMethod(method, kernelString);
+    bool needsOddTransformation = false; // ob nur ungerade Zahlen geprüft werden
+    bool needsSundaramTransformation = false; // ob das Array transformiert werden muss
+    bool needsInversion = false; // ob das Array invertieert werden muss
+
+    // Welche Zahlen sollen geprüft werden?
+    int64 l, u; // untere und obere Grenze
+    askRange(l, u, method);
+    int64 rangeSize = u + 1 - l;
+    int64 arraySize = rangeSize;
+
+    if (method >= 100 || method == 6 || method == 7) { // für Methoden, die nur ungerade Zahlen prüfen
+        arraySize = rangeSize / 2; // Array-Größe anpassen
+        needsOddTransformation = true;
+    }
+
+    // Parameter für den Kernel setzen
+    int blockSize; // Anzahl der Threads pro Block
+    askBlockSize(blockSize);
+
+    bool testAll = false;
+    double times[6]; // Zeiten für die verschiedenen Blockgrößen
+    if (blockSize == 1) { // alle Blockgrößen testen
+        testAll = true;
+        blockSize = 32;
+	}
+
+    // Kernel starten ===============================================================================================
+
+    printf("\nInitializing arrays ... ");
+
+    // Array auf dem Host anlegen und initialisieren
+    bool* array;
+    array = (bool*)malloc(arraySize * sizeof(bool)); // Array auf dem Host anlegen
+    for (int64 i = 0; i < arraySize; i++) { // Array mit true initialisieren
+        array[i] = true;
+    }
+
+    // Kernel ausführen
+    executeKernel(method, blockSize, array, arraySize, l, u, times, testAll, kernelString,
+        needsInversion, needsSundaramTransformation);
+
+    // Ausgabe vorbereiten
+    if(needsInversion) {
+        invertArray(array, rangeSize, arraySize);
+	}
+    if (needsOddTransformation) {
+		transformOdd(array, rangeSize, arraySize);
+	}
+    if (needsSundaramTransformation) {
+        transformSundaram(array, rangeSize, u);
     }
 
     // Anzahl der Primzahlen zählen und ausgeben ====================================================================
+
     long primeCount = 0;
     for (int64 i = 0; i < rangeSize; i++) {
         if (array[i]) { // Anzahl der Primzahlen zählen
