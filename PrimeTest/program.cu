@@ -525,7 +525,6 @@ int main() {
                 primeTest3 <<< blocks, blockSize >>> (deviceArray, l, u);
                 break;
             }
-
             case 4: { // Sieb des Eratosthenes
                 sieveEratosthenes <<< sqrtf(blocks), blockSize >>> (deviceArray, u);
                 break;
