@@ -18,6 +18,10 @@ Fabian Vecellio del Monego, 2024
 #include <string>
 #include <cudaProfiler.h>
 #include <cuda_profiler_api.h>
+#include <cmath>
+#include <cstdint>
+#include <ctype.h>
+#include <omp.h> 
 
 using int64 = long long int;  // weil "long" unter Windows nur 32 Bit hat und "long long int" unübersichtlich ist
 using int32u = unsigned int;
@@ -240,7 +244,7 @@ __global__ void primeTest6(bool* array, int32u u) {
 // Neben geraden auch Zahlen ausschließen, die durch 3 teilbar sind
 __global__ void primeTest7(bool* array, int32u u) {
     int32u index = threadIdx.x + blockIdx.x * blockDim.x;
-    int32u i = 6 * (index >> 1) + (index % 2 ? 5 : 1); // Zahlen ausschließen, die durch 2 oder 3 teilbar sind
+    int32u i = 6 * (index >> 1) + (index & 1 ? 5 : 1); // Zahlen ausschließen, die durch 2 oder 3 teilbar sind
 
     int32u sqrt = sqrtf(i); // Teiler müssen <= die Quadratwurzel der Zahl sein
     for (int32u j = 5; j <= sqrt; j += 6) { // Primzahlen größer 3 folgen dem Muster 6k ± 1
@@ -477,6 +481,7 @@ void askMethod(int& method, std::string& kernelString) { // Funktion, um die Met
     printf("Please choose a method. (1, 2, 3, 4, 5)\n");
     printf("1 = Trivial Test; 2 = Enhanced Test; 3 = Further enhanced Test; "
         "4 = Sieve of Eratosthenes; 5 = Sieve of Sundaram\n");
+    printf("Additional methods: 33, 44, 333, 3333, 6, 7\n");
     printf("Enter method option: ");
     clearInputBuffer;
     scanf_s("%d", &option);
@@ -675,10 +680,10 @@ void output(bool* array, int64 l, int64 u, int64 rangeSize, long primeCount) { /
                     lineLength += primeString.length() + 1; // Aktualisieren der aktuellen Zeilenlänge
                 }
             }
-            printf("\n");
+            printf("\n\n");
         }
         else {
-            printf("\nOkay, bye!\n");
+            printf("\nOkay, bye!\n\n");
         }
     }
     return;
@@ -687,10 +692,6 @@ void output(bool* array, int64 l, int64 u, int64 rangeSize, long primeCount) { /
 // Hauptfunktion ####################################################################################################
 
 int main() {
-    // Modus wählen
-    
-
-
     // Methode wählen
     int method;
     std::string kernelString;
@@ -727,9 +728,9 @@ int main() {
     if (blockSize == 1) { // alle Blockgrößen testen
         testAll = true;
         blockSize = 32;
-	}
+    }
 
-    // Kernel-Ausführung ===========================================================================================
+    // Kernel-Ausführung ============================================================================================
 
     printf("\nInitializing arrays ... ");
 
@@ -740,17 +741,17 @@ int main() {
         array[i] = true;
     }
 
-    // Kernel starten
+    // GPU-Kernel starten
     executeKernel(method, blockSize, array, arraySize, l, u, times, testAll, kernelString,
         needsInversion, needsSundaramTransformation);
 
     // Ausgabe-Array ggf. invertieren oder transformieren
-    if(needsInversion) {
+    if (needsInversion) {
         invertArray(array, rangeSize, arraySize);
-	}
+    }
     if (needsOddTransformation) {
-		transformOdd(array, rangeSize, arraySize);
-	}
+        transformOdd(array, rangeSize, arraySize);
+    }
     if (needs2_3Transformation) {
         transform2_3(array, rangeSize, arraySize);
     }
@@ -758,7 +759,7 @@ int main() {
         transformSundaram(array, rangeSize, u);
     }
 
-    // Anzahl der Primzahlen zählen und ausgeben ====================================================================
+    // Anzahl der Primzahlen zählen und ausgeben =====================================================================
 
     long primeCount = 0;
     for (int64 i = 0; i < rangeSize; i++) {
@@ -780,16 +781,16 @@ int main() {
 
     if (verifiable) {
         if (matchesRealPrimeNumber(u, primeCount)) {
-			printf("\nThe number of found primes seems to check out.\n");
-		}
-		else {
-			printf("\nThere's a mismatch between the number of found primes and the actual number "
+            printf("\nThe number of primes found seems to be correct.\n");
+        }
+        else {
+            printf("\nThere's a mismatch between the number of found primes and the actual number "
                 "included in the given interval.");
-		}
+        }
     }
 
     output(array, l, u, rangeSize, primeCount); // Gibt Werte an Ausgabe-Funktion weiter
-    
+
     free(array); // Speicher freigeben  
 
     return 0;
@@ -801,6 +802,7 @@ int main() {
         33) 33s, 44: 82s, 
         333) 17s, 444) 27s [falsch]
         3333) 12s, 
+        7) 8s
     4.000.000.000: 
         3) 1107s, 4) 400s,
         33) 270s, 44) 330s, 
