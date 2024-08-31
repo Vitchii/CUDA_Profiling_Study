@@ -18,10 +18,6 @@ Fabian Vecellio del Monego, 2024
 #include <string>
 #include <cudaProfiler.h>
 #include <cuda_profiler_api.h>
-#include <cmath>
-#include <cstdint>
-#include <ctype.h>
-#include <omp.h> 
 
 using int64 = long long int;  // weil "long" unter Windows nur 32 Bit hat und "long long int" unübersichtlich ist
 using int32u = unsigned int;
@@ -809,4 +805,6 @@ int main() {
         333) 134s 
         3333) 93s 
         7) 65s
+    8.000.000.000:
+        7) 128s
  */
